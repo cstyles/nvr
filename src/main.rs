@@ -56,15 +56,10 @@ fn wait_for_buffer_to_close(
 }
 
 fn get_channel_id(nvim: &mut Neovim) -> Option<u64> {
-    nvim.session
-        .call("nvim_get_api_info", vec![])
-        .ok()
-        .as_ref()
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .next()
-        .and_then(Value::as_u64)
+    let message = nvim.session.call("nvim_get_api_info", vec![]).ok()?;
+    let array = message.as_array()?;
+    let first = array.first()?;
+    first.as_u64()
 }
 
 /// Sets up an autocmd group that will listen for BufDelete events and send a message back to us
