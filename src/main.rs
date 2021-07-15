@@ -21,18 +21,14 @@ fn open_in_existing_neovim<T: AsRef<Path>>(
     let (mut nvim, receiver) = connect_to_nvim(listen_address);
     nvim.command("split")?;
 
-    let result = match arg {
+    match arg {
         Some(arg) => {
             let command = format!("edit {}", arg);
-            nvim.command(&command)
-                .and_then(|()| nvim.command("set bufhidden=delete"))
-                .and_then(|()| wait_for_buffer_to_close(&mut nvim, receiver))
+            nvim.command(&command)?;
+            nvim.command("set bufhidden=delete")?;
+            wait_for_buffer_to_close(&mut nvim, receiver)?;
         }
-        None => nvim.command("enew"),
-    };
-
-    if let Err(err) = result {
-        eprintln!("{}", err);
+        None => nvim.command("enew")?,
     };
 
     Ok(())
