@@ -1,26 +1,96 @@
-use neovim_lib::{Neovim, Session};
+use neovim_lib::{CallError, Neovim, NeovimApi, Session, Value};
 use std::env;
 use std::process::{exit, Command};
+use std::sync::mpsc::Receiver;
 
 fn main() {
     let arg = env::args().nth(1);
 
     match env::var("NVIM_LISTEN_ADDRESS") {
-        Ok(listen_address) => connect_to_neovim_process(listen_address, arg),
+        Ok(listen_address) => open_in_existing_neovim(listen_address, arg).unwrap(),
         Err(_) => launch_new_neovim_process(arg),
     };
 }
 
-fn connect_to_neovim_process(listen_address: String, arg: Option<String>) {
-    let _nvim = connect_to_nvim(&listen_address);
-    println!("Connected!");
-    println!("arg = {:?}", arg);
+fn open_in_existing_neovim(listen_address: String, arg: Option<String>) -> Result<(), CallError> {
+    let (mut nvim, receiver) = connect_to_nvim(&listen_address);
+    nvim.command("split")?;
+
+    let result = match arg {
+        Some(arg) => {
+            let command = format!("edit {}", arg);
+            nvim.command(&command)
+                .and_then(|()| nvim.command("set bufhidden=delete"))
+                .and_then(|()| wait_for_buffer_to_close(&mut nvim, receiver))
+        }
+        None => nvim.command("enew"),
+    };
+
+    if let Err(err) = result {
+        eprintln!("{}", err);
+    };
+
+    Ok(())
 }
 
-fn connect_to_nvim(address: &str) -> Neovim {
+fn wait_for_buffer_to_close(
+    nvim: &mut Neovim,
+    receiver: Receiver<(String, Vec<Value>)>,
+) -> Result<(), CallError> {
+    let channel_id = match get_channel_id(nvim) {
+        Some(channel_id) => channel_id,
+        None => {
+            eprintln!("Couldn't acquire channel ID");
+            exit(2)
+        }
+    };
+
+    set_up_augroup(nvim, channel_id)?;
+
+    // Wait for a response from neovim, triggered by closing the buffer
+    // TODO: check that the response is actually what we expect?
+    let _ = receiver.recv().unwrap();
+
+    Ok(())
+}
+
+fn get_channel_id(nvim: &mut Neovim) -> Option<u64> {
+    nvim.session
+        .call("nvim_get_api_info", vec![])
+        .as_ref()
+        .map(Value::as_array)
+        .ok()
+        .flatten()
+        .as_deref() // .map(Vec::as_slice)
+        .map(|slice| slice.get(0))
+        .flatten()
+        .map(Value::as_u64)
+        .flatten()
+}
+
+/// Sets up an autocmd group that will listen for BufDelete events and send a message back to us
+/// when the buffer that we opened is closed.
+fn set_up_augroup(nvim: &mut Neovim, channel_id: u64) -> Result<(), CallError> {
+    let command = [
+        "augroup nvr".into(),
+        format!(
+            "autocmd BufDelete <buffer> silent! call rpcnotify({}, \"BufDelete\")",
+            channel_id
+        ),
+        "augroup END".into(),
+    ]
+    .join("|");
+
+    nvim.command(&command)
+}
+
+fn connect_to_nvim(address: &str) -> (Neovim, Receiver<(String, Vec<Value>)>) {
     let mut session = Session::new_unix_socket(address).unwrap();
-    session.start_event_loop();
-    Neovim::new(session)
+
+    // Store a Receiver that we can use to read responses back from neovim
+    let receiver = session.start_event_loop_channel();
+
+    (Neovim::new(session), receiver)
 }
 
 fn launch_new_neovim_process(arg: Option<String>) {
