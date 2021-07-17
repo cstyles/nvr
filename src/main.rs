@@ -31,11 +31,8 @@ fn open_in_existing_neovim(
             let command = arg.strip_prefix('+').expect("always Some");
             commands.push(command);
         } else {
-            nvim.command("split")?;
-
-            let command = format!("edit {}", arg);
+            let command = format!("split | edit {} | set bufhidden=delete", arg);
             nvim.command(&command)?;
-            nvim.command("set bufhidden=delete")?;
         }
     }
 
