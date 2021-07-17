@@ -13,8 +13,8 @@ fn main() {
     };
 }
 
-fn open_in_existing_neovim<T: AsRef<Path>>(
-    listen_address: T,
+fn open_in_existing_neovim(
+    listen_address: impl AsRef<Path>,
     arg: Option<String>,
 ) -> Result<(), CallError> {
     let listen_address = listen_address.as_ref();
