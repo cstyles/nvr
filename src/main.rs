@@ -5,31 +5,35 @@ use std::process::{exit, Command};
 use std::sync::mpsc::Receiver;
 
 fn main() {
-    let arg = env::args().nth(1);
+    let args: Vec<String> = env::args().skip(1).collect();
 
     match env::var_os("NVIM_LISTEN_ADDRESS") {
-        Some(listen_address) => open_in_existing_neovim(listen_address, arg).unwrap(),
-        None => launch_new_neovim_process(arg),
+        Some(listen_address) => open_in_existing_neovim(listen_address, args).unwrap(),
+        None => launch_new_neovim_process(args),
     };
 }
 
 fn open_in_existing_neovim(
     listen_address: impl AsRef<Path>,
-    arg: Option<String>,
+    args: Vec<String>,
 ) -> Result<(), CallError> {
     let listen_address = listen_address.as_ref();
     let (mut nvim, receiver) = connect_to_nvim(listen_address);
-    nvim.command("split")?;
 
-    match arg {
-        Some(arg) => {
-            let command = format!("edit {}", arg);
-            nvim.command(&command)?;
-            nvim.command("set bufhidden=delete")?;
-            wait_for_buffer_to_close(&mut nvim, receiver)?;
-        }
-        None => nvim.command("enew")?,
-    };
+    if args.is_empty() {
+        return nvim.command("enew");
+    }
+
+    for arg in args {
+        nvim.command("split")?;
+
+        let command = format!("edit {}", arg);
+        nvim.command(&command)?;
+        nvim.command("set bufhidden=delete")?;
+    }
+
+    // TODO: this will only wait for one buffer to close
+    wait_for_buffer_to_close(&mut nvim, receiver)?;
 
     Ok(())
 }
@@ -88,9 +92,9 @@ fn connect_to_nvim<T: AsRef<Path>>(address: T) -> (Neovim, Receiver<(String, Vec
     (Neovim::new(session), receiver)
 }
 
-fn launch_new_neovim_process(arg: Option<String>) {
+fn launch_new_neovim_process(args: Vec<String>) {
     let return_code = Command::new("nvim")
-        .args(arg)
+        .args(args)
         .spawn()
         .expect("failed to lanuch neovim")
         .wait()
