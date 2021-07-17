@@ -24,12 +24,23 @@ fn open_in_existing_neovim(
         return nvim.command("enew");
     }
 
-    for arg in args {
-        nvim.command("split")?;
+    let mut commands = vec![];
 
-        let command = format!("edit {}", arg);
-        nvim.command(&command)?;
-        nvim.command("set bufhidden=delete")?;
+    for arg in args.iter() {
+        if arg.starts_with('+') {
+            let command = arg.strip_prefix('+').expect("always Some");
+            commands.push(command);
+        } else {
+            nvim.command("split")?;
+
+            let command = format!("edit {}", arg);
+            nvim.command(&command)?;
+            nvim.command("set bufhidden=delete")?;
+        }
+    }
+
+    for command in commands {
+        nvim.command(command)?;
     }
 
     // TODO: this will only wait for one buffer to close
