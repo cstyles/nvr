@@ -104,7 +104,7 @@ fn launch_new_neovim_process(args: Vec<String>) {
     let return_code = Command::new("nvim")
         .args(args)
         .spawn()
-        .expect("failed to lanuch neovim")
+        .expect("failed to launch neovim")
         .wait()
         .unwrap()
         .code()
