@@ -32,7 +32,10 @@ fn open_in_existing_neovim(
             let command = arg.strip_prefix('+').expect("always Some");
             commands.push(command);
         } else {
-            let command = format!("split | lcd {} | edit {} | set bufhidden=delete", cd, arg);
+            let command = format!(
+                "split | lcd {} | edit {} | setlocal bufhidden=delete",
+                cd, arg
+            );
             nvim.command(&command)?;
         }
     }
