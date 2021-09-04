@@ -25,13 +25,14 @@ fn open_in_existing_neovim(
     }
 
     let mut commands = vec![];
+    let cd = std::env::var("PWD").expect("no PWD");
 
     for arg in args.iter() {
         if arg.starts_with('+') {
             let command = arg.strip_prefix('+').expect("always Some");
             commands.push(command);
         } else {
-            let command = format!("split | edit {} | set bufhidden=delete", arg);
+            let command = format!("split | lcd {} | edit {} | set bufhidden=delete", cd, arg);
             nvim.command(&command)?;
         }
     }
