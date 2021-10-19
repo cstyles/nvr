@@ -1,6 +1,6 @@
 use neovim_lib::{CallError, Neovim, NeovimApi, Session, Value};
 use std::env;
-use std::path::Path;
+use std::ffi::OsString;
 use std::process::{exit, Command};
 use std::sync::mpsc::Receiver;
 
@@ -13,11 +13,7 @@ fn main() {
     };
 }
 
-fn open_in_existing_neovim(
-    listen_address: impl AsRef<Path>,
-    args: Vec<String>,
-) -> Result<(), CallError> {
-    let listen_address = listen_address.as_ref();
+fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Result<(), CallError> {
     let (mut nvim, receiver) = connect_to_nvim(listen_address);
 
     if args.is_empty() {
@@ -94,8 +90,7 @@ fn set_up_augroup(nvim: &mut Neovim, channel_id: u64) -> Result<(), CallError> {
     nvim.command(&command)
 }
 
-fn connect_to_nvim<T: AsRef<Path>>(address: T) -> (Neovim, Receiver<(String, Vec<Value>)>) {
-    let address = address.as_ref();
+fn connect_to_nvim(address: OsString) -> (Neovim, Receiver<(String, Vec<Value>)>) {
     let mut session = Session::new_unix_socket(address).unwrap();
 
     // Store a Receiver that we can use to read responses back from neovim
