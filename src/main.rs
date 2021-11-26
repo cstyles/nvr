@@ -1,4 +1,5 @@
 use neovim_lib::{CallError, Neovim, NeovimApi, Session, Value};
+use std::collections::HashSet;
 use std::env;
 use std::ffi::OsString;
 use std::process::{exit, Command};
@@ -16,12 +17,23 @@ fn main() {
 fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Result<(), CallError> {
     let (mut nvim, receiver) = connect_to_nvim(listen_address);
 
+    let channel_id = get_channel_id(&mut nvim).unwrap_or_else(|| {
+        eprintln!("Couldn't acquire channel ID");
+        exit(2)
+    });
+
     if args.is_empty() {
         nvim.command("split | enew | setlocal bufhidden=delete")?;
-        return wait_for_buffer_to_close(&mut nvim, receiver);
+        set_up_augroup(&mut nvim, channel_id)?;
+
+        let buffer_number = nvim.get_current_buf()?.get_number(&mut nvim)?;
+        let buffer_numbers = HashSet::from([buffer_number]);
+
+        return wait_for_buffers_to_close(receiver, buffer_numbers);
     }
 
     let mut commands = vec![];
+    let mut buffer_numbers = HashSet::with_capacity(args.len());
     let cd = std::env::var("PWD").expect("no PWD");
 
     for arg in args.iter() {
@@ -33,7 +45,12 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
                 "split | lcd {} | edit {} | setlocal bufhidden=delete",
                 cd, arg
             );
+
             nvim.command(&command)?;
+            set_up_augroup(&mut nvim, channel_id)?;
+
+            let buffer_number = nvim.get_current_buf()?.get_number(&mut nvim)?;
+            buffer_numbers.insert(buffer_number);
         }
     }
 
@@ -41,29 +58,31 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
         nvim.command(command)?;
     }
 
-    // TODO: this will only wait for one buffer to close
-    wait_for_buffer_to_close(&mut nvim, receiver)?;
+    wait_for_buffers_to_close(receiver, buffer_numbers)?;
 
     Ok(())
 }
 
-fn wait_for_buffer_to_close(
-    nvim: &mut Neovim,
+/// Waits for a response from neovim, triggered by closing the buffer
+fn wait_for_buffers_to_close(
     receiver: Receiver<(String, Vec<Value>)>,
+    mut buffer_numbers: HashSet<i64>,
 ) -> Result<(), CallError> {
-    let channel_id = match get_channel_id(nvim) {
-        Some(channel_id) => channel_id,
-        None => {
-            eprintln!("Couldn't acquire channel ID");
-            exit(2)
+    loop {
+        let message = receiver.recv().unwrap();
+
+        match message.1.as_slice() {
+            [Value::Integer(num)] => {
+                let num = num.as_i64().expect("Buffer number wasn't an integer.");
+                buffer_numbers.remove(&num);
+            }
+            anything_else => eprintln!("Received unexpected message: {:?}", anything_else),
+        };
+
+        if buffer_numbers.is_empty() {
+            break;
         }
-    };
-
-    set_up_augroup(nvim, channel_id)?;
-
-    // Wait for a response from neovim, triggered by closing the buffer
-    // TODO: check that the response is actually what we expect?
-    let _ = receiver.recv().unwrap();
+    }
 
     Ok(())
 }
@@ -75,18 +94,18 @@ fn get_channel_id(nvim: &mut Neovim) -> Option<u64> {
     first.as_u64()
 }
 
-/// Sets up an autocmd group that will listen for BufDelete events and send a message back to us
-/// when the buffer that we opened is closed.
+/// Sets up an autocmd group that will listen for BufDelete events for the current buffer
+/// and send a message back to us when the buffer is closed.
 fn set_up_augroup(nvim: &mut Neovim, channel_id: u64) -> Result<(), CallError> {
     let command = [
         "augroup nvr".into(),
         format!(
-            "autocmd BufDelete <buffer> silent! call rpcnotify({}, \"BufDelete\")",
+            "autocmd BufDelete <buffer> silent! call rpcnotify({}, \"BufDelete\", bufnr())",
             channel_id
         ),
         "augroup END".into(),
     ]
-    .join("|");
+    .join(" | ");
 
     nvim.command(&command)
 }
