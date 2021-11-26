@@ -17,7 +17,8 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
     let (mut nvim, receiver) = connect_to_nvim(listen_address);
 
     if args.is_empty() {
-        return nvim.command("enew");
+        nvim.command("split | enew | setlocal bufhidden=delete")?;
+        return wait_for_buffer_to_close(&mut nvim, receiver);
     }
 
     let mut commands = vec![];
