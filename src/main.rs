@@ -68,7 +68,7 @@ fn wait_for_buffers_to_close(
     receiver: Receiver<(String, Vec<Value>)>,
     mut buffer_numbers: HashSet<i64>,
 ) -> Result<(), CallError> {
-    loop {
+    while !buffer_numbers.is_empty() {
         let message = receiver.recv().unwrap();
 
         match message.1.as_slice() {
@@ -78,10 +78,6 @@ fn wait_for_buffers_to_close(
             }
             anything_else => eprintln!("Received unexpected message: {:?}", anything_else),
         };
-
-        if buffer_numbers.is_empty() {
-            break;
-        }
     }
 
     Ok(())
