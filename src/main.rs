@@ -8,7 +8,7 @@ use std::sync::mpsc::Receiver;
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 
-    match env::var_os("NVIM_LISTEN_ADDRESS") {
+    match env::var_os("NVIM") {
         Some(listen_address) => open_in_existing_neovim(listen_address, args).unwrap(),
         None => launch_new_neovim_process(args),
     };
