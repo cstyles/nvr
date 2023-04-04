@@ -38,7 +38,12 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
 
     for arg in args.iter() {
         if let Some(command) = arg.strip_prefix('+') {
-            commands.push(command);
+            // If there is no command, go to last line
+            if command.is_empty() {
+                commands.push("$");
+            } else {
+                commands.push(command);
+            }
         } else {
             let command = format!(
                 "split | lcd {} | edit {} | setlocal bufhidden=delete",
