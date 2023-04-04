@@ -37,8 +37,7 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
     let cd = std::env::var("PWD").expect("no PWD");
 
     for arg in args.iter() {
-        if arg.starts_with('+') {
-            let command = arg.strip_prefix('+').expect("always Some");
+        if let Some(command) = arg.strip_prefix('+') {
             commands.push(command);
         } else {
             let command = format!(
