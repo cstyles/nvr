@@ -45,6 +45,10 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
             } else {
                 commands.push(command);
             }
+        } else if arg == "-q" {
+            let error_file = args.next().expect("No errorfile given");
+            let command = format!("split | cfile {error_file}");
+            nvim.command(&command)?;
         } else {
             let command = format!(
                 "split | lcd {} | edit {} | setlocal bufhidden=delete",
