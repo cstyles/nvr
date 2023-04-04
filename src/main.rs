@@ -36,7 +36,8 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
     let mut buffer_numbers = HashSet::with_capacity(args.len());
     let cd = std::env::var("PWD").expect("no PWD");
 
-    for arg in args.iter() {
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
         if let Some(command) = arg.strip_prefix('+') {
             // If there is no command, go to last line
             if command.is_empty() {
