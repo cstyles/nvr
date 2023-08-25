@@ -9,12 +9,12 @@ fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 
     match env::var_os("NVIM") {
-        Some(listen_address) => open_in_existing_neovim(listen_address, args).unwrap(),
+        Some(listen_address) => open_in_existing_neovim(listen_address, &args).unwrap(),
         None => launch_new_neovim_process(args),
     };
 }
 
-fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Result<(), CallError> {
+fn open_in_existing_neovim(listen_address: OsString, args: &[String]) -> Result<(), CallError> {
     let (mut nvim, receiver) = connect_to_nvim(listen_address);
 
     let channel_id = get_channel_id(&mut nvim).unwrap_or_else(|| {
@@ -29,7 +29,8 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
         let buffer_number = nvim.get_current_buf()?.get_number(&mut nvim)?;
         let buffer_numbers = HashSet::from([buffer_number]);
 
-        return wait_for_buffers_to_close(receiver, buffer_numbers);
+        wait_for_buffers_to_close(&receiver, buffer_numbers);
+        return Ok(());
     }
 
     let mut commands = vec![];
@@ -50,10 +51,7 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
             let command = format!("split | cfile {error_file}");
             nvim.command(&command)?;
         } else {
-            let command = format!(
-                "split | lcd {} | edit {} | setlocal bufhidden=delete",
-                cd, arg
-            );
+            let command = format!("split | lcd {cd} | edit {arg} | setlocal bufhidden=delete",);
 
             nvim.command(&command)?;
             set_up_augroup(&mut nvim, channel_id)?;
@@ -67,16 +65,16 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
         nvim.command(command)?;
     }
 
-    wait_for_buffers_to_close(receiver, buffer_numbers)?;
+    wait_for_buffers_to_close(&receiver, buffer_numbers);
 
     Ok(())
 }
 
 /// Waits for a response from neovim, triggered by closing the buffer
 fn wait_for_buffers_to_close(
-    receiver: Receiver<(String, Vec<Value>)>,
+    receiver: &Receiver<(String, Vec<Value>)>,
     mut buffer_numbers: HashSet<i64>,
-) -> Result<(), CallError> {
+) {
     while !buffer_numbers.is_empty() {
         let message = receiver.recv().unwrap();
 
@@ -85,11 +83,9 @@ fn wait_for_buffers_to_close(
                 let num = num.as_i64().expect("Buffer number wasn't an integer.");
                 buffer_numbers.remove(&num);
             }
-            anything_else => eprintln!("Received unexpected message: {:?}", anything_else),
+            anything_else => eprintln!("Received unexpected message: {anything_else:?}"),
         };
     }
-
-    Ok(())
 }
 
 fn get_channel_id(nvim: &mut Neovim) -> Option<u64> {
@@ -99,14 +95,13 @@ fn get_channel_id(nvim: &mut Neovim) -> Option<u64> {
     first.as_u64()
 }
 
-/// Sets up an autocmd group that will listen for BufDelete events for the current buffer
+/// Sets up an autocmd group that will listen for `BufDelete` events for the current buffer
 /// and send a message back to us when the buffer is closed.
 fn set_up_augroup(nvim: &mut Neovim, channel_id: u64) -> Result<(), CallError> {
     let command = [
         "augroup nvr".into(),
         format!(
-            "autocmd BufDelete <buffer> silent! call rpcnotify({}, \"BufDelete\", bufnr())",
-            channel_id
+            "autocmd BufDelete <buffer> silent! call rpcnotify({channel_id}, \"BufDelete\", bufnr())"
         ),
         "augroup END".into(),
     ]
