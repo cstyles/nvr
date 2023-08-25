@@ -50,6 +50,8 @@ fn open_in_existing_neovim(listen_address: OsString, args: &[String]) -> Result<
             let error_file = args.next().expect("No errorfile given");
             let command = format!("split | cfile {error_file}");
             nvim.command(&command)?;
+            // Don't set up augroup and wait for the buffer to close. It's possible (even likely)
+            // that the user will jump to another file using `:cnext`.
         } else {
             let command = format!("split | lcd {cd} | edit {arg} | setlocal bufhidden=delete",);
 
