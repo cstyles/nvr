@@ -156,11 +156,11 @@ fn set_up_augroup(nvim: &mut Neovim) -> Result<(), CallError> {
     let channel_id = get_channel_id(nvim);
 
     let command = [
-        "augroup nvr".into(),
-        format!(
+        "augroup nvr",
+        &format!(
             "autocmd BufDelete <buffer> silent! call rpcnotify({channel_id}, \"BufDelete\", bufnr())"
         ),
-        "augroup END".into(),
+        "augroup END",
     ]
     .join(" | ");
 
