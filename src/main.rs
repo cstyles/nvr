@@ -23,14 +23,7 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
     });
 
     if args.is_empty() {
-        nvim.command("split | enew | setlocal bufhidden=delete")?;
-        set_up_augroup(&mut nvim, channel_id)?;
-
-        let buffer_number = nvim.get_current_buf()?.get_number(&mut nvim)?;
-        let buffer_numbers = HashSet::from([buffer_number]);
-
-        wait_for_buffers_to_close(&receiver, buffer_numbers);
-        return Ok(());
+        return open_empty_buffer(nvim, channel_id, receiver);
     }
 
     let mut commands = vec![];
@@ -69,6 +62,21 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
 
     wait_for_buffers_to_close(&receiver, buffer_numbers);
 
+    Ok(())
+}
+
+fn open_empty_buffer(
+    mut nvim: Neovim,
+    channel_id: u64,
+    receiver: Receiver<(String, Vec<Value>)>,
+) -> Result<(), CallError> {
+    nvim.command("split | enew | setlocal bufhidden=delete")?;
+    set_up_augroup(&mut nvim, channel_id)?;
+
+    let buffer_number = nvim.get_current_buf()?.get_number(&mut nvim)?;
+    let buffer_numbers = HashSet::from([buffer_number]);
+
+    wait_for_buffers_to_close(&receiver, buffer_numbers);
     Ok(())
 }
 
