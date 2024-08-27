@@ -83,6 +83,11 @@ fn open_empty_buffer(
 }
 
 fn errorfile_mode(mut nvim: Neovim, args: Vec<String>) -> Result<(), CallError> {
+    if let Some(extra_arg) = args.get(2) {
+        eprintln!(r#"nvr: Too many edit arguments: "{extra_arg}""#);
+        exit(1);
+    }
+
     let error_file = args.get(1).expect("No errorfile given");
     let command = format!("split | cfile {error_file}");
     nvim.command(&command)
