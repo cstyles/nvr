@@ -9,12 +9,12 @@ fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 
     match env::var_os("NVIM") {
-        Some(listen_address) => open_in_existing_neovim(listen_address, &args).unwrap(),
+        Some(listen_address) => open_in_existing_neovim(listen_address, args).unwrap(),
         None => launch_new_neovim_process(args),
     };
 }
 
-fn open_in_existing_neovim(listen_address: OsString, args: &[String]) -> Result<(), CallError> {
+fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Result<(), CallError> {
     let (mut nvim, receiver) = connect_to_nvim(listen_address);
 
     let channel_id = get_channel_id(&mut nvim).unwrap_or_else(|| {
