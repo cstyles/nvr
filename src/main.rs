@@ -140,14 +140,13 @@ fn wait_for_buffers_to_close(
 }
 
 fn get_channel_id(nvim: &mut Neovim) -> u64 {
-    get_channel_id_opt(nvim).expect("Couldn't acquire channel ID")
-}
-
-fn get_channel_id_opt(nvim: &mut Neovim) -> Option<u64> {
-    let message = nvim.session.call("nvim_get_api_info", vec![]).ok()?;
-    let array = message.as_array()?;
-    let first = array.first()?;
-    first.as_u64()
+    || -> _ {
+        let message = nvim.session.call("nvim_get_api_info", vec![]).ok()?;
+        let array = message.as_array()?;
+        let first = array.first()?;
+        first.as_u64()
+    }()
+    .expect("Couldn't acquire channel ID")
 }
 
 /// Sets up an autocmd group that will listen for `BufDelete` events for the current buffer
