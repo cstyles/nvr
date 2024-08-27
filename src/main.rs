@@ -24,6 +24,7 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
 
     match args.first().map(|s| s.as_str()) {
         None => open_empty_buffer(nvim, channel_id, receiver),
+        Some("-d") => diff_mode(nvim, channel_id, receiver, args),
         Some("-q") => errorfile_mode(nvim, args),
         Some(_) => standard_mode(nvim, channel_id, receiver, args),
     }
@@ -94,6 +95,38 @@ fn errorfile_mode(mut nvim: Neovim, args: Vec<String>) -> Result<(), CallError> 
 
     // Don't set up augroup and wait for the buffer to close. It's possible (even likely)
     // that the user will jump to another file using `:cnext`.
+}
+
+fn diff_mode(
+    mut nvim: Neovim,
+    channel_id: u64,
+    receiver: Receiver<(String, Vec<Value>)>,
+    args: Vec<String>,
+) -> Result<(), CallError> {
+    let cd = std::env::var("PWD").expect("no PWD");
+    let mut buffer_numbers = HashSet::with_capacity(args.len());
+
+    let Some(arg) = args.get(1) else {
+        return open_empty_buffer(nvim, channel_id, receiver);
+    };
+
+    let command = format!("split | lcd {cd} | edit {arg} | setlocal bufhidden=delete");
+    nvim.command(&command)?;
+    set_up_augroup(&mut nvim, channel_id)?;
+    let buffer_number = nvim.get_current_buf()?.get_number(&mut nvim)?;
+    buffer_numbers.insert(buffer_number);
+
+    for arg in args.get(2..).unwrap() {
+        let command = format!("vertical diffsplit {arg} | setlocal bufhidden=delete");
+        nvim.command(&command)?;
+        set_up_augroup(&mut nvim, channel_id)?;
+
+        let buffer_number = nvim.get_current_buf()?.get_number(&mut nvim)?;
+        buffer_numbers.insert(buffer_number);
+    }
+
+    wait_for_buffers_to_close(&receiver, buffer_numbers);
+    Ok(())
 }
 
 /// Waits for a response from neovim, triggered by closing the buffer
