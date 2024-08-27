@@ -49,7 +49,7 @@ fn standard_mode(
                 commands.push(command);
             }
         } else {
-            let command = format!("split | lcd {cd} | edit {arg} | setlocal bufhidden=delete",);
+            let command = format!("split | lcd {cd} | edit {arg} | setlocal bufhidden=delete");
 
             nvim.command(&command)?;
             set_up_augroup(&mut nvim, channel_id)?;
