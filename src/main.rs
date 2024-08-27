@@ -23,9 +23,18 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
     });
 
     if args.is_empty() {
-        return open_empty_buffer(nvim, channel_id, receiver);
+        open_empty_buffer(nvim, channel_id, receiver)
+    } else {
+        standard_mode(nvim, channel_id, receiver, args)
     }
+}
 
+fn standard_mode(
+    mut nvim: Neovim,
+    channel_id: u64,
+    receiver: Receiver<(String, Vec<Value>)>,
+    args: Vec<String>,
+) -> Result<(), CallError> {
     let mut commands = vec![];
     let mut buffer_numbers = HashSet::with_capacity(args.len());
     let cd = std::env::var("PWD").expect("no PWD");
