@@ -22,10 +22,10 @@ fn open_in_existing_neovim(listen_address: OsString, args: Vec<String>) -> Resul
         exit(2)
     });
 
-    if args.is_empty() {
-        open_empty_buffer(nvim, channel_id, receiver)
-    } else {
-        standard_mode(nvim, channel_id, receiver, args)
+    match args.first().map(|s| s.as_str()) {
+        None => open_empty_buffer(nvim, channel_id, receiver),
+        Some("-q") => errorfile_mode(nvim, args),
+        Some(_) => standard_mode(nvim, channel_id, receiver, args),
     }
 }
 
@@ -39,8 +39,7 @@ fn standard_mode(
     let mut buffer_numbers = HashSet::with_capacity(args.len());
     let cd = std::env::var("PWD").expect("no PWD");
 
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
+    for arg in args.iter() {
         if let Some(command) = arg.strip_prefix('+') {
             // If there is no command, go to last line
             if command.is_empty() {
@@ -48,12 +47,6 @@ fn standard_mode(
             } else {
                 commands.push(command);
             }
-        } else if arg == "-q" {
-            let error_file = args.next().expect("No errorfile given");
-            let command = format!("split | cfile {error_file}");
-            nvim.command(&command)?;
-            // Don't set up augroup and wait for the buffer to close. It's possible (even likely)
-            // that the user will jump to another file using `:cnext`.
         } else {
             let command = format!("split | lcd {cd} | edit {arg} | setlocal bufhidden=delete",);
 
@@ -87,6 +80,15 @@ fn open_empty_buffer(
 
     wait_for_buffers_to_close(&receiver, buffer_numbers);
     Ok(())
+}
+
+fn errorfile_mode(mut nvim: Neovim, args: Vec<String>) -> Result<(), CallError> {
+    let error_file = args.get(1).expect("No errorfile given");
+    let command = format!("split | cfile {error_file}");
+    nvim.command(&command)
+
+    // Don't set up augroup and wait for the buffer to close. It's possible (even likely)
+    // that the user will jump to another file using `:cnext`.
 }
 
 /// Waits for a response from neovim, triggered by closing the buffer
